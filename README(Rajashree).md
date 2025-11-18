@@ -84,3 +84,6 @@ Deepgram STT/TTS + aiohttp + dotenv
 
 Environment variables:
 LIVEKIT_API_KEY, LIVEKIT_API_SECRET, DEEPGRAM_API_KEY
+
+
+AUDIO RECORDING: https://drive.google.com/file/d/1Y987-subvrQIDpiwWne7CrRXItPAtpAy/view?usp=drive_link
