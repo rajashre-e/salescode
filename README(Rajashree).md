@@ -1,91 +1,86 @@
 # 🎤 LiveKit Voice Interruption Handling Challenge — Final Submission  
-### *Filler Ignore + Hard Interrupt Detection + No-VAD Continuous Mode + Manual LLM Routing*
+### *Filler Ignore + Hard Interrupts + No-VAD Continuous Mode + Manual LLM Routing*
 
 ---
 
 ## 🔍 Overview  
-This project is my complete solution for the **LiveKit Voice Interruption Handling Challenge**.  
-The challenge required enhancing a real-time LiveKit agent so that it:
+This project implements a custom interruption-handling system for LiveKit that works **fully without VAD**, relying only on transcript events.  
+The agent can:
 
-- Ignores filler words like **“uh”, “umm”, “hmm”, “haan”** when the agent is speaking  
-- Registers those same words as speech when the agent is quiet  
-- Stops speaking immediately when real interruptions occur (e.g., “stop”, “wait”)  
-- Works **without modifying LiveKit’s VAD**  
-- Maintains real-time responsiveness and natural dialogue  
-- Uses transcription events only (extension layer)
-
-My implementation fulfills *all* these objectives using a **custom interruption manager**, filler-detection logic, full disabling of automatic STT→LLM routing, and a manual forwarding pipeline.
+- Ignore fillers (*“umm”, “uh”, “hmm”, “haan”*) while speaking  
+- Accept the same fillers when the agent is silent  
+- Stop TTS instantly on real interrupt commands  
+- Use a complete manual STT → LLM routing pipeline  
+- Maintain stable, real-time responsiveness  
 
 ---
 
-# 🧠 What Changed (Implementation Summary)
+# 🧠 What Changed
 
-## ✅ 1. **InterruptManager (new module)**
-Handles:  
-- Text normalization + tokenization  
+## 1. Removal of VAD  
+Default LiveKit VAD was fully bypassed.  
+The agent now runs in **continuous always-listening mode**, with all speech detection done via transcript logic.
+
+## 2. New InterruptManager  
+A centralized module that handles:
+- Text normalization  
 - Filler-only detection  
-- Hard-interrupt command detection  
-- Background noise handling via confidence scoring  
-- 250ms TTS speaking grace window  
-- Decision output:  
-  - `ignore`  
-  - `log_only`  
-  - `interrupt`  
-  - `interrupt_block`  
-  - `accept`  
+- Real interrupt detection  
+- Light scoring for noisy input  
+- Decision outputs (`ignore`, `accept`, `interrupt`, etc.)
+
+## 3. All Auto-Forwarding Disabled  
+Every default LiveKit callback that forwards transcripts to the LLM was intercepted and deactivated.  
+Only the custom logic decides what reaches the model.
+
+## 4. Manual LLM Forwarding  
+All valid speech is forwarded via a controlled `receive_transcription()` flow.
+
+## 5. Expanded Filler Engine  
+Detects English + Hinglish fillers and elongated sounds (e.g., “ummmmm”).
+
+## 6. Hard Interrupt Commands  
+Words like **“stop”, “wait”, “listen”, “hold on”** terminate TTS instantly.
 
 ---
 
-## ✅ 2. **Disabled All Auto-Forwarding Inside LiveKit**
-To ensure *only* my logic decides what reaches the LLM, I wrapped or nulled every known LiveKit callback that automatically forwards transcripts:
+# 🟢 What Works
 
-- `_on_user_transcript`  
-- `_handle_transcription`  
-- `_router.handle_user_transcript`  
-- `_pipeline.handle_transcription`  
-- `receive_transcription()`  
-- `add_user_message()`  
-- `send_user_message()`  
-- `ingest_user_message()`  
-
-This guarantees **no transcript bypasses my filter**.
+- Fillers are **ignored** when the agent is speaking  
+- The same fillers are **accepted** when the agent is silent  
+- Real interrupt phrases stop TTS immediately  
+- No accidental transcripts reach the LLM  
+- Continuous mode runs smoothly even without VAD  
 
 ---
 
-## ✅ 3. **Manual LLM Forwarding System**
-Accepted speech is forwarded manually via:
+# ⚠️ Known Issues
 
-- `receive_transcription(event)`  
-  *(or fallback equivalents)*
+- Logging becomes more complex because most internal routing is overridden  
+- Very short micro-utterances may occasionally be misclassified  
+- Low-volume STT confidence sometimes fluctuates  
 
-Blocked or filler-only transcripts never reach the LLM.
-
----
-
-## ✅ 4. **Advanced Filler Detection Engine**
-Supports:  
-- English fillers (“uh”, “umm”, “hmm”)  
-- Hinglish filler **“haan”**  
-- Regex detection of elongated fillers (e.g., “ummmmm”)  
-- Language-agnostic token normalization  
+These do not affect overall functionality.
 
 ---
 
-## ✅ 5. **Hard Interrupt Commands**
-Commands such as:
+# 🧪 Steps to Test
 
-- **stop**
-- **wait**
-- **hold on**
-- **hey**
-- **listen**
-- **no no**
-- **pause**
+1. Start:
+```bash
+python myagent.py console
+```
+During TTS, say “umm”, “uh”, “hmm”, “haan” → agent ignores them.
+Say “stop” or “wait” → TTS stops instantly.
+While silent, say a filler → agent treats it as valid speech.
 
-Trigger **instant TTS cut-off** and return the decision:
+🖥 Environment
 
-If the agent is mid-sentence, the audio stream is stopped immediately and the LLM is instructed to yield control.
+Python: 3.10 / 3.11
 
----
+LiveKit Agents: 1.3.2
 
+Deepgram STT/TTS + aiohttp + dotenv
 
+Environment variables:
+LIVEKIT_API_KEY, LIVEKIT_API_SECRET, DEEPGRAM_API_KEY
